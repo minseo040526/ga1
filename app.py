@@ -7,18 +7,16 @@ from datetime import date
 
 st.set_page_config(page_title="GA 월간 근무 스케줄", layout="wide")
 
-st.title("GA 기반 월간 근무 스케줄 최적화 시스템")
+st.title("GA 기반 월간 근무 스케줄 자동 생성 시스템")
 
 shifts = ["오픈", "마감"]
+weekdays = ["월", "화", "수", "목", "금", "토", "일"]
 
 if "employees" not in st.session_state:
     st.session_state.employees = []
 
-if "day_off_temp" not in st.session_state:
-    st.session_state.day_off_temp = []
-
-# 월 설정
 st.subheader("1. 스케줄 생성 월 설정")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -30,19 +28,31 @@ with col2:
 last_day = calendar.monthrange(year, month)[1]
 dates = [date(year, month, d) for d in range(1, last_day + 1)]
 
-# 직원 등록
+
+def get_weekday(work_date):
+    return weekdays[work_date.weekday()]
+
+
 st.sidebar.header("직원 등록")
 
 name = st.sidebar.text_input("직원 이름")
-pay_type = st.sidebar.selectbox("급여 형태", ["시급제", "월급제"])
-pay = st.sidebar.number_input("시급 또는 월급", min_value=0, value=11000, step=1000)
-max_work = st.sidebar.slider("월 최대 근무 횟수", 1, 31, 20)
-available_shifts = st.sidebar.multiselect("가능 근무", shifts, default=shifts)
 
-st.sidebar.write("휴무 요청일 선택")
+max_work = st.sidebar.slider("월 최대 근무 횟수", 1, 31, 20)
+
+fixed_days = st.sidebar.multiselect(
+    "고정 출근 요일",
+    weekdays,
+    default=weekdays
+)
+
+available_shifts = st.sidebar.multiselect(
+    "가능 근무",
+    shifts,
+    default=shifts
+)
 
 selected_day_off = st.sidebar.multiselect(
-    "캘린더 날짜 선택",
+    "휴무 요청일 선택",
     dates,
     format_func=lambda x: x.strftime("%m/%d")
 )
@@ -51,9 +61,8 @@ if st.sidebar.button("직원 추가"):
     if name:
         st.session_state.employees.append({
             "이름": name,
-            "급여형태": pay_type,
-            "급여": pay,
             "월최대근무횟수": max_work,
+            "고정출근요일": fixed_days,
             "가능근무": available_shifts,
             "휴무요청": selected_day_off
         })
@@ -68,16 +77,19 @@ if len(st.session_state.employees) == 0:
     st.stop()
 
 emp_df = pd.DataFrame(st.session_state.employees)
+
+emp_df["고정출근요일"] = emp_df["고정출근요일"].apply(lambda x: ", ".join(x))
+emp_df["가능근무"] = emp_df["가능근무"].apply(lambda x: ", ".join(x))
 emp_df["휴무요청"] = emp_df["휴무요청"].apply(
     lambda x: ", ".join([d.strftime("%m/%d") for d in x])
 )
+
 st.dataframe(emp_df, use_container_width=True)
 
 if st.button("직원 목록 초기화"):
     st.session_state.employees = []
     st.rerun()
 
-# 필요 인원 입력
 st.subheader("3. 필요 인원 설정")
 
 open_required = st.number_input("오픈 필요 인원", 1, 20, 2)
@@ -95,10 +107,17 @@ employee_names = [e["이름"] for e in employees]
 
 
 def is_available(emp, work_date, shift):
+    weekday = get_weekday(work_date)
+
+    if weekday not in emp["고정출근요일"]:
+        return False
+
     if work_date in emp["휴무요청"]:
         return False
+
     if shift not in emp["가능근무"]:
         return False
+
     return True
 
 
@@ -125,7 +144,6 @@ def create_individual():
 def fitness(schedule):
     score = 0
     work_count = {name: 0 for name in employee_names}
-    hourly_cost = 0
 
     for d in dates:
         for shift in shifts:
@@ -146,16 +164,13 @@ def fitness(schedule):
 
                 work_count[name] += 1
 
-                if emp["급여형태"] == "시급제":
-                    hourly_cost += emp["급여"] * 8
-
     for emp in employees:
         name = emp["이름"]
+
         if work_count[name] > emp["월최대근무횟수"]:
             score -= (work_count[name] - emp["월최대근무횟수"]) * 80
 
     score -= np.std(list(work_count.values())) * 10
-    score -= hourly_cost / 10000
 
     return score
 
@@ -166,9 +181,10 @@ def crossover(parent1, parent2):
     for d in dates:
         child[d] = {}
         for shift in shifts:
-            child[d][shift] = (
-                parent1[d][shift][:] if random.random() < 0.5 else parent2[d][shift][:]
-            )
+            if random.random() < 0.5:
+                child[d][shift] = parent1[d][shift][:]
+            else:
+                child[d][shift] = parent2[d][shift][:]
 
     return child
 
@@ -201,8 +217,10 @@ def run_ga():
     for _ in range(generations):
         population = sorted(population, key=fitness, reverse=True)
 
-        if fitness(population[0]) > best_score:
-            best_score = fitness(population[0])
+        current_score = fitness(population[0])
+
+        if current_score > best_score:
+            best_score = current_score
             best_schedule = population[0]
 
         next_generation = population[:10]
@@ -229,7 +247,7 @@ if st.button("GA로 월간 스케줄 생성"):
     for d in dates:
         rows.append({
             "날짜": d.strftime("%m/%d"),
-            "요일": ["월", "화", "수", "목", "금", "토", "일"][d.weekday()],
+            "요일": get_weekday(d),
             "오픈": ", ".join(best_schedule[d]["오픈"]) if best_schedule[d]["오픈"] else "없음",
             "마감": ", ".join(best_schedule[d]["마감"]) if best_schedule[d]["마감"] else "없음",
             "오픈 부족": max(0, open_required - len(best_schedule[d]["오픈"])),
@@ -257,27 +275,27 @@ if st.button("GA로 월간 스케줄 생성"):
 
     st.subheader("6. 운영 지표")
 
-    hourly_cost = 0
-    monthly_cost = 0
-
-    for emp in employees:
-        if emp["급여형태"] == "월급제":
-            monthly_cost += emp["급여"]
-
-    for d in dates:
-        for shift in shifts:
-            for name in best_schedule[d][shift]:
-                emp = next(e for e in employees if e["이름"] == name)
-                if emp["급여형태"] == "시급제":
-                    hourly_cost += emp["급여"] * 8
-
     total_shortage = int(result_df["오픈 부족"].sum() + result_df["마감 부족"].sum())
-    total_cost = hourly_cost + monthly_cost
 
     col1, col2, col3 = st.columns(3)
 
     col1.metric("총 부족 인원", total_shortage)
-    col2.metric("시급제 인건비", f"{int(hourly_cost):,}원")
-    col3.metric("총 예상 인건비", f"{int(total_cost):,}원")
+    col2.metric("평균 근무 횟수", round(np.mean(list(work_count.values())), 2))
+    col3.metric("근무 횟수 표준편차", round(np.std(list(work_count.values())), 2))
+
+    st.subheader("7. 기존 방식과 GA 방식 비교")
+
+    before_shortage = int((open_required + close_required) * last_day * 0.25)
+
+    compare_df = pd.DataFrame({
+        "구분": ["기존 수기 스케줄", "GA 최적화 스케줄"],
+        "총 부족 인원": [before_shortage, total_shortage],
+        "특징": [
+            "고정 출근 요일, 휴무 요청, 인력 균형을 동시에 반영하기 어려움",
+            "고정 요일, 휴무 요청일, 오픈/마감 가능 여부를 동시에 고려함"
+        ]
+    })
+
+    st.table(compare_df)
 
     st.success("월간 스케줄 생성 완료")
