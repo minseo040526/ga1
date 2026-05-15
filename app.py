@@ -9,13 +9,57 @@ from datetime import date
 
 st.set_page_config(page_title="GA 월간 근무 스케줄", layout="wide")
 
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+}
+.main-title {
+    font-size: 34px;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 5px;
+}
+.sub-title {
+    font-size: 16px;
+    color: #64748b;
+    margin-bottom: 25px;
+}
+.card {
+    background: white;
+    padding: 22px;
+    border-radius: 18px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    margin-bottom: 18px;
+}
+.section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 18px;
+    margin-bottom: 10px;
+}
+.store-badge {
+    display: inline-block;
+    background: #4f46e5;
+    color: white;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+div[data-testid="stMetric"] {
+    background: white;
+    padding: 18px;
+    border-radius: 16px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+}
+</style>
+""", unsafe_allow_html=True)
+
 shifts = ["오픈", "마감"]
 weekdays = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-# =========================
-# DB
-# =========================
 def init_db():
     conn = sqlite3.connect("schedule.db")
     c = conn.cursor()
@@ -82,6 +126,7 @@ def load_employees(store_name):
     conn.close()
 
     employees = []
+
     for row in rows:
         employees.append({
             "id": row[0],
@@ -163,54 +208,54 @@ def clear_employees(store_name):
 
 init_db()
 
-
-# =========================
-# 로그인 화면
-# =========================
 if "login" not in st.session_state:
     st.session_state.login = False
 
 if "store_name" not in st.session_state:
     st.session_state.store_name = None
 
+
 if not st.session_state.login:
-    st.title("GA 기반 월간 근무 스케줄 자동 생성 시스템")
+    st.markdown('<div class="main-title">GA 기반 월간 근무 스케줄 자동 생성 시스템</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">매장별 직원 정보를 저장하고 유전 알고리즘으로 월간 근무표를 생성합니다.</div>', unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["매장 로그인", "매장 등록"])
 
     with tab1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         store_name = st.text_input("매장명")
         password = st.text_input("비밀번호", type="password")
 
-        if st.button("로그인"):
+        if st.button("로그인", use_container_width=True):
             if login_store(store_name, password):
                 st.session_state.login = True
                 st.session_state.store_name = store_name
+                st.session_state.employees = load_employees(store_name)
                 st.rerun()
             else:
-                st.error("매장명 또는 비밀번호가 틀렸어")
+                st.error("매장명 또는 비밀번호가 틀렸습니다.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with tab2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         new_store = st.text_input("새 매장명")
         new_pw = st.text_input("새 비밀번호", type="password")
 
-        if st.button("매장 등록"):
+        if st.button("매장 등록", use_container_width=True):
             if new_store and new_pw:
                 if register_store(new_store, new_pw):
-                    st.success("매장 등록 완료")
+                    st.success("매장 등록이 완료되었습니다.")
                 else:
-                    st.error("이미 등록된 매장이야")
+                    st.error("이미 등록된 매장입니다.")
             else:
-                st.warning("매장명과 비밀번호를 입력해줘")
+                st.warning("매장명과 비밀번호를 입력해주세요.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.stop()
 
 
-# =========================
-# 메인 화면
-# =========================
-st.title("GA 기반 월간 근무 스케줄 자동 생성 시스템")
-st.caption(f"현재 매장: {st.session_state.store_name}")
+st.markdown('<div class="main-title">GA 기반 월간 근무 스케줄 자동 생성 시스템</div>', unsafe_allow_html=True)
+st.markdown(f'<span class="store-badge">현재 매장: {st.session_state.store_name}</span>', unsafe_allow_html=True)
 
 if st.button("로그아웃"):
     st.session_state.login = False
@@ -220,7 +265,7 @@ if st.button("로그아웃"):
 if "employees" not in st.session_state:
     st.session_state.employees = load_employees(st.session_state.store_name)
 
-st.subheader("1. 스케줄 생성 월 설정")
+st.markdown('<div class="section-title">1. 스케줄 생성 월 설정</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -240,14 +285,14 @@ def calendar_dayoff_selector(dates, year, month, key_prefix, default_selected=No
     if default_selected is None:
         default_selected = []
 
-    st.sidebar.write("휴무 요청일 선택")
+    st.sidebar.markdown("### 휴무 요청일 선택")
 
     first_weekday, _ = calendar.monthrange(year, month)
     selected_days = []
 
     header_cols = st.sidebar.columns(7)
     for i, wd in enumerate(weekdays):
-        header_cols[i].write(wd)
+        header_cols[i].markdown(f"**{wd}**")
 
     week = [None] * first_weekday
 
@@ -291,9 +336,6 @@ def calendar_dayoff_selector(dates, year, month, key_prefix, default_selected=No
     return selected_days
 
 
-# =========================
-# 직원 등록/수정
-# =========================
 st.sidebar.header("직원 등록 / 수정")
 
 employees = st.session_state.employees
@@ -368,45 +410,37 @@ new_emp = {
     "휴무요청": selected_day_off
 }
 
-col_add, col_update, col_delete = st.sidebar.columns(3)
+if st.sidebar.button("직원 추가", use_container_width=True):
+    if name:
+        save_employee(st.session_state.store_name, new_emp)
+        st.session_state.employees = load_employees(st.session_state.store_name)
+        st.rerun()
+    else:
+        st.sidebar.warning("직원 이름을 입력해주세요.")
 
-with col_add:
-    if st.button("추가"):
-        if name:
-            save_employee(st.session_state.store_name, new_emp)
-            st.session_state.employees = load_employees(st.session_state.store_name)
-            st.rerun()
-        else:
-            st.sidebar.warning("직원 이름 입력해줘")
+if st.sidebar.button("직원 정보 수정", use_container_width=True):
+    if selected_emp is not None:
+        update_employee(selected_emp["id"], new_emp)
+        st.session_state.employees = load_employees(st.session_state.store_name)
+        st.rerun()
+    else:
+        st.sidebar.warning("수정할 직원을 선택해주세요.")
 
-with col_update:
-    if st.button("수정"):
-        if selected_emp is not None:
-            update_employee(selected_emp["id"], new_emp)
-            st.session_state.employees = load_employees(st.session_state.store_name)
-            st.rerun()
-        else:
-            st.sidebar.warning("수정할 직원을 선택해줘")
-
-with col_delete:
-    if st.button("삭제"):
-        if selected_emp is not None:
-            delete_employee(selected_emp["id"])
-            st.session_state.employees = load_employees(st.session_state.store_name)
-            st.rerun()
-        else:
-            st.sidebar.warning("삭제할 직원을 선택해줘")
+if st.sidebar.button("직원 삭제", use_container_width=True):
+    if selected_emp is not None:
+        delete_employee(selected_emp["id"])
+        st.session_state.employees = load_employees(st.session_state.store_name)
+        st.rerun()
+    else:
+        st.sidebar.warning("삭제할 직원을 선택해주세요.")
 
 
-# =========================
-# 등록 직원 표시
-# =========================
-st.subheader("2. 등록된 직원")
+st.markdown('<div class="section-title">2. 등록된 직원</div>', unsafe_allow_html=True)
 
 employees = st.session_state.employees
 
 if len(employees) == 0:
-    st.warning("왼쪽 사이드바에서 직원을 먼저 등록해줘")
+    st.warning("왼쪽 사이드바에서 직원을 먼저 등록해주세요.")
     st.stop()
 
 emp_df = pd.DataFrame(employees)
@@ -427,27 +461,24 @@ if st.button("현재 매장 직원 전체 초기화"):
     st.rerun()
 
 
-# =========================
-# 필요 인원
-# =========================
-st.subheader("3. 필요 인원 설정")
+st.markdown('<div class="section-title">3. 필요 인원 설정</div>', unsafe_allow_html=True)
 
-open_required = st.number_input("오픈 필요 인원", 1, 20, 2)
-close_required = st.number_input("마감 필요 인원", 1, 20, 2)
+col1, col2, col3 = st.columns(3)
+with col1:
+    open_required = st.number_input("오픈 필요 인원", 1, 20, 2)
+with col2:
+    close_required = st.number_input("마감 필요 인원", 1, 20, 2)
+with col3:
+    generations = st.slider("GA 반복 세대 수", 50, 700, 300)
 
 required_staff = {
     "오픈": open_required,
     "마감": close_required
 }
 
-generations = st.slider("GA 반복 세대 수", 50, 700, 300)
-
 employee_names = [e["이름"] for e in employees]
 
 
-# =========================
-# GA 함수
-# =========================
 def is_available(emp, work_date, shift):
     weekday = get_weekday(work_date)
 
@@ -535,7 +566,6 @@ def fitness(schedule):
             for name in assigned:
                 emp = next(e for e in employees if e["이름"] == name)
 
-                # 휴무 신청일은 사실상 절대 배정 금지
                 if d in emp["휴무요청"]:
                     score -= 1_000_000
 
@@ -550,17 +580,20 @@ def fitness(schedule):
         if work_count[name] > emp["월최대근무횟수"]:
             score -= (work_count[name] - emp["월최대근무횟수"]) * 200
 
-    # 월급제 휴무 개수 반영
     for emp in employees:
         if emp["직원유형"] == "월급제":
             name = emp["이름"]
             work_days = get_work_days(schedule, name)
+
             actual_off_count = last_day - len(work_days)
             target_off_count = emp["월휴무개수"]
 
-            score -= abs(actual_off_count - target_off_count) * 150
+            if actual_off_count > target_off_count:
+                score -= 100_000_000
 
-    # 전날 마감 -> 다음날 오픈 페널티
+            elif actual_off_count < target_off_count:
+                score -= (target_off_count - actual_off_count) * 50_000
+
     for i in range(len(dates) - 1):
         today = dates[i]
         tomorrow = dates[i + 1]
@@ -569,7 +602,6 @@ def fitness(schedule):
             if name in schedule[today]["마감"] and name in schedule[tomorrow]["오픈"]:
                 score -= 150
 
-    # 최대 연속 근무 5일 제한
     for name in employee_names:
         work_days = get_work_days(schedule, name)
         max_consecutive = max_consecutive_work_days(work_days)
@@ -577,7 +609,6 @@ def fitness(schedule):
         if max_consecutive > 5:
             score -= (max_consecutive - 5) * 500
 
-    # 근무 균형
     score -= np.std(list(work_count.values())) * 15
 
     return score
@@ -649,7 +680,6 @@ def make_calendar_df(schedule):
 
     calendar_rows = []
     week = [""] * 7
-
     day_index = first_weekday
 
     for d in dates:
@@ -672,19 +702,17 @@ def make_calendar_df(schedule):
     return pd.DataFrame(calendar_rows, columns=weekdays)
 
 
-# =========================
-# 실행 결과
-# =========================
-if st.button("GA로 월간 스케줄 생성"):
-    best_schedule, best_score = run_ga()
+if st.button("GA로 월간 스케줄 생성", type="primary", use_container_width=True):
+    with st.spinner("유전 알고리즘으로 최적 스케줄을 탐색 중입니다..."):
+        best_schedule, best_score = run_ga()
 
-    st.subheader("4. 월간 캘린더 스케줄")
-    st.write(f"적합도 점수: {round(best_score, 2)}")
+    st.markdown('<div class="section-title">4. 월간 캘린더 스케줄</div>', unsafe_allow_html=True)
+    st.info(f"적합도 점수: {round(best_score, 2)}")
 
     calendar_df = make_calendar_df(best_schedule)
     st.dataframe(calendar_df, use_container_width=True, height=500)
 
-    st.subheader("5. 상세 스케줄표")
+    st.markdown('<div class="section-title">5. 상세 스케줄표</div>', unsafe_allow_html=True)
 
     rows = []
 
@@ -701,7 +729,7 @@ if st.button("GA로 월간 스케줄 생성"):
     result_df = pd.DataFrame(rows)
     st.dataframe(result_df, use_container_width=True)
 
-    st.subheader("6. 직원별 근무 분석")
+    st.markdown('<div class="section-title">6. 직원별 근무 분석</div>', unsafe_allow_html=True)
 
     analysis_rows = []
 
@@ -750,4 +778,4 @@ if st.button("GA로 월간 스케줄 생성"):
     col2.metric("마감→다음날 오픈", total_close_to_open)
     col3.metric("5일 초과 연속근무 직원 수", over_5_count)
 
-    st.success("월간 스케줄 생성 완료")
+    st.success("월간 스케줄 생성이 완료되었습니다.")
